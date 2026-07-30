@@ -1,0 +1,65 @@
+{% extends "base.html" %}
+{% block title %}Working Hours · Rounds{% endblock %}
+{% block content %}
+
+<div class="page-head">
+  <h1>Working hours</h1>
+  <p class="page-sub">Set which school you're at, and when, for each day of the work week. This is the template the weekly schedule gets built from.</p>
+</div>
+
+<section class="panel">
+  <h2 class="panel-title">Add a block</h2>
+  <form method="post" action="{{ url_for('add_work_block') }}" class="grid-fields block-form">
+    <div class="field">
+      <label>Day</label>
+      <select name="day_of_week" required>
+        {% for name in day_names %}
+        <option value="{{ loop.index0 }}">{{ name }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="field">
+      <label>Start</label>
+      <input type="time" name="start_time" required>
+    </div>
+    <div class="field">
+      <label>End</label>
+      <input type="time" name="end_time" required>
+    </div>
+    <div class="field">
+      <label>School</label>
+      <input type="text" name="school" list="school-list" required placeholder="Lincoln Elementary">
+      <datalist id="school-list">
+        {% for s in schools %}<option value="{{ s }}">{% endfor %}
+      </datalist>
+    </div>
+    <div class="field field-submit">
+      <label>&nbsp;</label>
+      <button type="submit" class="btn btn-primary">Add block</button>
+    </div>
+  </form>
+</section>
+
+<section class="week-strip">
+  {% for name in day_names %}
+  <div class="day-column">
+    <h3 class="day-heading">{{ name }}</h3>
+    {% set blocks = by_day[loop.index0] %}
+    {% if not blocks %}
+      <p class="empty-state small">No working hours set.</p>
+    {% else %}
+      {% for b in blocks %}
+      <div class="block-card">
+        <div class="block-time mono">{{ b.start_time }}&ndash;{{ b.end_time }}</div>
+        <div class="block-school">{{ b.school }}</div>
+        <form method="post" action="{{ url_for('delete_work_block', block_id=b.id) }}" class="inline-form">
+          <button type="submit" class="btn btn-quiet btn-sm btn-danger">Remove</button>
+        </form>
+      </div>
+      {% endfor %}
+    {% endif %}
+  </div>
+  {% endfor %}
+</section>
+
+{% endblock %}

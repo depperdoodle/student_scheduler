@@ -1,0 +1,76 @@
+{% set roster = e.students %}
+{% set all_seen = roster and roster|selectattr('seen')|list|length == roster|length %}
+<div class="entry-card {{ 'entry-group' if e.is_group }} {{ 'entry-seen' if all_seen }} {{ 'entry-empty' if not roster }}"
+     id="entry-card-{{ e.id }}"
+     ondragover="allowDrop(event)"
+     ondragleave="dragLeave(event)"
+     ondrop="handleDrop(event, {{ e.id }})">
+  <div class="entry-top">
+    <div class="entry-time mono">{{ e.start_time }}&ndash;{{ e.end_time }}</div>
+    {% if e.is_group %}<span class="chip chip-group">Group &middot; {{ roster|length }}/{{ group_size_max }}</span>{% endif %}
+  </div>
+  <div class="entry-school chip">{{ e.school }}</div>
+
+  {% if roster %}
+  <ul class="roster-list">
+    {% for st in roster %}
+    <li class="roster-item {{ 'roster-seen' if st.seen }}"
+        draggable="{{ 'false' if st.seen else 'true' }}"
+        ondragstart="dragStartRoster(event, {{ st.student_id }}, {{ e.id }})">
+      <span class="priority-badge p-{{ st.priority }}">{{ st.priority }}</span>
+      <span class="entry-name">{{ st.name }}</span>
+      <span class="entry-minutes mono">{{ st.minutes_seen }} min lifetime</span>
+      {% if st.seen %}
+        <span class="seen-check">&#10003; {{ st.minutes_credited }} min credited</span>
+      {% else %}
+        <button type="button" class="chip-remove" title="Remove from this slot"
+                onclick="removeStudent({{ e.id }}, {{ st.student_id }})">&times;</button>
+      {% endif %}
+    </li>
+    {% endfor %}
+  </ul>
+  {% else %}
+  <div class="entry-student entry-unassigned drop-hint">Drag a student here</div>
+  {% endif %}
+
+  <details class="entry-controls">
+    <summary>Adjust roster &amp; attendance</summary>
+
+    <form method="post" action="{{ url_for('override_entry', entry_id=e.id) }}" class="roster-form">
+      <input type="hidden" name="week_start" value="{{ week_start }}">
+      <div class="roster-checklist" data-max="{{ group_size_max }}">
+        {% for st in all_students %}
+        {% set is_checked = roster|selectattr('student_id', 'equalto', st.id)|list|length > 0 %}
+        {% set is_seen_locked = roster|selectattr('student_id', 'equalto', st.id)|selectattr('seen')|list|length > 0 %}
+        <label class="roster-check-label">
+          <input type="checkbox" name="student_ids" value="{{ st.id }}"
+                 {{ 'checked' if is_checked }} {{ 'disabled' if is_seen_locked }}
+                 {{ 'data-lock="seen"' if is_seen_locked }}
+                 onchange="enforceGroupCap(this)">
+          {{ st.name }} <span class="hint">({{ st.school }})</span>
+          {% if is_seen_locked %}<span class="hint">&mdash; already seen, can't remove</span>{% endif %}
+        </label>
+        {% endfor %}
+      </div>
+      <button type="submit" class="btn btn-quiet btn-sm">Save roster (max {{ group_size_max }})</button>
+    </form>
+
+    {% if roster %}
+    <form method="post" action="{{ url_for('mark_attendance', entry_id=e.id) }}" class="attendance-form">
+      <input type="hidden" name="week_start" value="{{ week_start }}">
+      {% for st in roster %}
+      <div class="control-row attendance-row">
+        <label class="checkbox-label">
+          <input type="checkbox" name="seen_{{ st.student_id }}" {{ 'checked' if st.seen }}>
+          {{ st.name }}
+        </label>
+        <input type="number" name="minutes_{{ st.student_id }}" min="0"
+               placeholder="{{ st.session_length if not e.is_group else 20 }} min"
+               value="{{ st.minutes_credited if st.minutes_credited else '' }}">
+      </div>
+      {% endfor %}
+      <button type="submit" class="btn btn-quiet btn-sm">Save attendance</button>
+    </form>
+    {% endif %}
+  </details>
+</div>

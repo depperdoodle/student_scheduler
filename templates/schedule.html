@@ -1,0 +1,206 @@
+{% extends "base.html" %}
+{% block title %}Weekly Schedule · Rounds{% endblock %}
+{% block content %}
+
+<div class="page-head schedule-head">
+  <div>
+    <h1>Week of {{ week_start }}</h1>
+    <p class="page-sub">Built from priority, minutes seen, availability, and your working hours. Groupable students who overlap at the same school are bundled into a 20-minute group session (up to {{ group_size_max }}) before anyone gets an individual slot. Drag students between slots to customize, or use "Adjust roster" for fine control.</p>
+  </div>
+  <div class="week-nav">
+    <a class="btn btn-quiet" href="{{ url_for('schedule', week=prev_week) }}">&#8592; Prev week</a>
+    <a class="btn btn-quiet" href="{{ url_for('schedule', week=next_week) }}">Next week &#8594;</a>
+  </div>
+</div>
+
+<section class="panel generate-panel">
+  <form method="post" action="{{ url_for('generate_schedule') }}">
+    <input type="hidden" name="week_start" value="{{ week_start }}">
+    <button type="submit" class="btn btn-primary">
+      {{ 'Regenerate schedule' if has_entries else 'Generate schedule' }}
+    </button>
+  </form>
+  <form method="post" action="{{ url_for('reset_schedule') }}" onsubmit="return confirm('Reset the whole week? This clears every slot — including overrides and anyone marked seen — and reverses any minutes credited this week. This can\'t be undone.');">
+    <input type="hidden" name="week_start" value="{{ week_start }}">
+    <button type="submit" class="btn btn-quiet btn-danger" {{ 'disabled' if not has_entries }}>Reset week</button>
+  </form>
+  <p class="hint">Regenerating leaves locked/overridden and already-seen slots alone, and rebuilds the rest. Resetting wipes the whole week clean and undoes any credited minutes.</p>
+</section>
+
+<div class="schedule-layout">
+  <aside class="student-pool" ondragover="allowDrop(event)" ondrop="handlePoolDrop(event)">
+    <h3 class="pool-heading">Caseload</h3>
+    <input type="text" id="pool-search" class="pool-search" placeholder="Filter by name or school&hellip;" oninput="filterPool()">
+    <p class="hint">Drag a student onto a slot to schedule them. Drag a slot's student back here to unschedule.</p>
+    <div class="pool-list" id="pool-list">
+      {% for st in all_students %}
+      <div class="pool-chip" draggable="true" ondragstart="dragStartPool(event, {{ st.id }})"
+           data-name="{{ st.name|lower }}" data-school="{{ st.school|lower }}">
+        <span class="priority-badge p-{{ st.priority }}">{{ st.priority }}</span>
+        <span class="pool-chip-name">{{ st.name }}</span>
+        <span class="pool-chip-school hint">{{ st.school }}</span>
+        {% if week_counts.get(st.id) %}
+        <span class="chip chip-muted pool-count">{{ week_counts.get(st.id) }}&times; this wk</span>
+        {% endif %}
+      </div>
+      {% endfor %}
+    </div>
+  </aside>
+
+  <section class="week-strip schedule-strip">
+    {% for name in day_names %}
+    <div class="day-column">
+      <h3 class="day-heading">{{ name }}</h3>
+      {% set entries = by_day[loop.index0] %}
+      {% if not entries %}
+        <p class="empty-state small">Nothing scheduled. Add working hours, then generate.</p>
+      {% else %}
+        {% for e in entries %}
+          {% include "_entry_card.html" %}
+        {% endfor %}
+      {% endif %}
+    </div>
+    {% endfor %}
+  </section>
+</div>
+
+<script>
+const WEEK_START = {{ week_start|tojson }};
+
+function allowDrop(ev) {
+  ev.preventDefault();
+  if (ev.currentTarget.classList.contains('entry-card') || ev.currentTarget.classList.contains('student-pool')) {
+    ev.currentTarget.classList.add('drop-hover');
+  }
+}
+function dragLeave(ev) {
+  ev.currentTarget.classList.remove('drop-hover');
+}
+
+function dragStartPool(ev, studentId) {
+  ev.dataTransfer.setData('text/plain', JSON.stringify({ studentId: studentId, fromEntryId: null }));
+}
+function dragStartRoster(ev, studentId, entryId) {
+  ev.dataTransfer.setData('text/plain', JSON.stringify({ studentId: studentId, fromEntryId: entryId }));
+}
+
+async function refreshCard(entryId) {
+  const res = await fetch(`/schedule/${entryId}/card?week=${encodeURIComponent(WEEK_START)}`);
+  if (!res.ok) return;
+  const html = await res.text();
+  const container = document.getElementById(`entry-card-${entryId}`);
+  if (container) container.outerHTML = html;
+}
+
+async function addStudentToEntry(entryId, studentId) {
+  const res = await fetch(`/api/schedule/${entryId}/add`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ student_id: studentId }),
+  });
+  const data = await res.json();
+  if (!data.ok) alert(data.message || "Couldn't add that student to this slot.");
+  await refreshCard(entryId);
+}
+
+async function removeStudent(entryId, studentId) {
+  const res = await fetch(`/api/schedule/${entryId}/remove`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ student_id: studentId }),
+  });
+  const data = await res.json();
+  if (!data.ok) { alert(data.message || "Couldn't remove that student."); return; }
+  await refreshCard(entryId);
+  updatePoolCount(studentId, -1);
+}
+
+function updatePoolCount(studentId, delta) {
+  // Best-effort visual nudge; a full page reload will always show the true count.
+  const chip = document.querySelector(`.pool-chip[ondragstart*="${studentId})"]`);
+  if (!chip) return;
+  let badge = chip.querySelector('.pool-count');
+  let current = badge ? parseInt(badge.textContent, 10) : 0;
+  const next = Math.max(0, current + delta);
+  if (next > 0) {
+    if (!badge) {
+      badge = document.createElement('span');
+      badge.className = 'chip chip-muted pool-count';
+      chip.appendChild(badge);
+    }
+    badge.textContent = next + '\u00d7 this wk';
+  } else if (badge) {
+    badge.remove();
+  }
+}
+
+async function handleDrop(ev, toEntryId) {
+  ev.preventDefault();
+  ev.currentTarget.classList.remove('drop-hover');
+  let data;
+  try {
+    data = JSON.parse(ev.dataTransfer.getData('text/plain'));
+  } catch (err) { return; }
+
+  const studentId = data.studentId;
+  const fromEntryId = data.fromEntryId;
+
+  if (fromEntryId && String(fromEntryId) === String(toEntryId)) return;
+
+  if (fromEntryId) {
+    const rres = await fetch(`/api/schedule/${fromEntryId}/remove`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ student_id: studentId }),
+    });
+    const rdata = await rres.json();
+    if (!rdata.ok) { alert(rdata.message || "Couldn't move that student — they may already be marked seen."); return; }
+    await refreshCard(fromEntryId);
+  } else {
+    updatePoolCount(studentId, 1);
+  }
+
+  await addStudentToEntry(toEntryId, studentId);
+}
+
+function handlePoolDrop(ev) {
+  ev.preventDefault();
+  ev.currentTarget.classList.remove('drop-hover');
+  let data;
+  try {
+    data = JSON.parse(ev.dataTransfer.getData('text/plain'));
+  } catch (err) { return; }
+  if (data.fromEntryId) {
+    removeStudent(data.fromEntryId, data.studentId);
+  }
+}
+
+function filterPool() {
+  const q = document.getElementById('pool-search').value.trim().toLowerCase();
+  document.querySelectorAll('.pool-chip').forEach(function(chip) {
+    const match = !q || chip.dataset.name.includes(q) || chip.dataset.school.includes(q);
+    chip.style.display = match ? '' : 'none';
+  });
+}
+
+function enforceGroupCap(changedBox) {
+  const container = changedBox.closest('.roster-checklist');
+  const max = parseInt(container.dataset.max, 10);
+  const boxes = container.querySelectorAll('input[type="checkbox"]');
+  const checkedCount = container.querySelectorAll('input[type="checkbox"]:checked').length;
+  boxes.forEach(function(b) {
+    if (b.dataset.lock === 'seen') return;
+    if (!b.checked) {
+      b.disabled = checkedCount >= max;
+    }
+  });
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+  document.querySelectorAll('.roster-checklist').forEach(function(container) {
+    const anyBox = container.querySelector('input[type="checkbox"]');
+    if (anyBox) enforceGroupCap(anyBox);
+  });
+});
+</script>
+{% endblock %}

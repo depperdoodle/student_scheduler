@@ -1,0 +1,198 @@
+{% extends "base.html" %}
+{% block title %}Caseload · Rounds{% endblock %}
+{% block content %}
+
+<div class="page-head">
+  <h1>Caseload</h1>
+  <p class="page-sub">Every student you track, their priority, school, and how much time they've had this term.</p>
+</div>
+
+<section class="panel">
+  <form method="get" class="filter-bar">
+    <div class="field">
+      <label>School</label>
+      <select name="school">
+        <option value="">All schools</option>
+        {% for s in schools %}
+        <option value="{{ s }}" {{ 'selected' if s == school_filter }}>{{ s }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="field">
+      <label>Min. priority</label>
+      <select name="min_priority">
+        <option value="">Any</option>
+        {% for n in range(1,11) %}
+        <option value="{{ n }}" {{ 'selected' if min_priority == n|string }}>{{ n }}+</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="field">
+      <label>Sort by</label>
+      <select name="sort">
+        <option value="priority_desc" {{ 'selected' if sort=='priority_desc' }}>Priority (high&#8594;low)</option>
+        <option value="priority_asc" {{ 'selected' if sort=='priority_asc' }}>Priority (low&#8594;high)</option>
+        <option value="minutes_seen" {{ 'selected' if sort=='minutes_seen' }}>Minutes seen (fewest first)</option>
+        <option value="minutes_seen_desc" {{ 'selected' if sort=='minutes_seen_desc' }}>Minutes seen (most first)</option>
+        <option value="name" {{ 'selected' if sort=='name' }}>Name</option>
+        <option value="school" {{ 'selected' if sort=='school' }}>School</option>
+      </select>
+    </div>
+    <button type="submit" class="btn btn-quiet">Apply</button>
+  </form>
+</section>
+
+<section class="panel">
+  <h2 class="panel-title">Add a student</h2>
+  <form method="post" action="{{ url_for('add_student') }}" class="student-form">
+    <div class="grid-fields">
+      <div class="field">
+        <label>Name</label>
+        <input type="text" name="name" required placeholder="Jordan Lee">
+      </div>
+      <div class="field">
+        <label>Priority (1&ndash;10)</label>
+        <input type="number" name="priority" min="1" max="10" value="5" required>
+      </div>
+      <div class="field">
+        <label>School</label>
+        <input type="text" name="school" list="school-list" required placeholder="Lincoln Elementary">
+        <datalist id="school-list">
+          {% for s in schools %}<option value="{{ s }}">{% endfor %}
+        </datalist>
+      </div>
+      <div class="field">
+        <label>Session length (min)</label>
+        <input type="number" name="session_length" min="5" step="5" value="30" required>
+      </div>
+    </div>
+
+    <label class="checkbox-label group-toggle">
+      <input type="checkbox" name="groupable">
+      OK to see in a group session <span class="hint">(up to {{ group_size_max|default(5) }}, same school, overlapping times, fixed 20-min length)</span>
+    </label>
+
+    <div class="avail-block">
+      <label>Available time windows <span class="hint">(any weekday, e.g. 9:00&ndash;11:00)</span></label>
+      <div id="avail-rows-new"></div>
+      <button type="button" class="btn btn-quiet btn-sm" onclick="addAvailRow('avail-rows-new')">+ Add time window</button>
+    </div>
+
+    <button type="submit" class="btn btn-primary">Add student</button>
+  </form>
+</section>
+
+<section class="panel">
+  <h2 class="panel-title">{{ students|length }} student{{ '' if students|length == 1 else 's' }}</h2>
+  {% if not students %}
+    <p class="empty-state">No students match these filters yet. Add one above, or clear your filters.</p>
+  {% else %}
+  <div class="table-wrap">
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Priority</th>
+          <th>School</th>
+          <th>Session</th>
+          <th>Group?</th>
+          <th>Minutes seen</th>
+          <th>Availability</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for s in students %}
+        <tr>
+          <td class="name-cell">{{ s.name }}</td>
+          <td><span class="priority-badge p-{{ s.priority }}">{{ s.priority }}</span></td>
+          <td>{{ s.school }}</td>
+          <td class="mono">{{ s.session_length }} min</td>
+          <td>
+            {% if s.groupable %}<span class="chip chip-group">Yes</span>{% else %}<span class="chip chip-muted">No</span>{% endif %}
+          </td>
+          <td class="mono">{{ s.minutes_seen }}</td>
+          <td>
+            {% for w in s.availability %}
+              <span class="chip">{{ w.start }}&ndash;{{ w.end }}</span>
+            {% else %}
+              <span class="chip chip-muted">none set</span>
+            {% endfor %}
+          </td>
+          <td class="actions-cell">
+            <button type="button" class="btn btn-quiet btn-sm" onclick="toggleEdit({{ s.id }})">Edit</button>
+            <form method="post" action="{{ url_for('delete_student', student_id=s.id) }}" class="inline-form" onsubmit="return confirm('Remove {{ s.name }} from the caseload?')">
+              <button type="submit" class="btn btn-quiet btn-sm btn-danger">Remove</button>
+            </form>
+          </td>
+        </tr>
+        <tr id="edit-row-{{ s.id }}" class="edit-row" style="display:none">
+          <td colspan="8">
+            <form method="post" action="{{ url_for('edit_student', student_id=s.id) }}" class="student-form edit-form">
+              <div class="grid-fields">
+                <div class="field">
+                  <label>Name</label>
+                  <input type="text" name="name" value="{{ s.name }}" required>
+                </div>
+                <div class="field">
+                  <label>Priority (1&ndash;10)</label>
+                  <input type="number" name="priority" min="1" max="10" value="{{ s.priority }}" required>
+                </div>
+                <div class="field">
+                  <label>School</label>
+                  <input type="text" name="school" value="{{ s.school }}" list="school-list" required>
+                </div>
+                <div class="field">
+                  <label>Session length (min)</label>
+                  <input type="number" name="session_length" min="5" step="5" value="{{ s.session_length }}" required>
+                </div>
+                <div class="field">
+                  <label>Minutes seen <span class="hint">(manual correction)</span></label>
+                  <input type="number" name="minutes_seen" min="0" value="{{ s.minutes_seen }}" required>
+                </div>
+              </div>
+              <label class="checkbox-label group-toggle">
+                <input type="checkbox" name="groupable" {{ 'checked' if s.groupable }}>
+                OK to see in a group session <span class="hint">(up to {{ group_size_max|default(5) }}, same school, overlapping times, fixed 20-min length)</span>
+              </label>
+              <div class="avail-block">
+                <label>Available time windows</label>
+                <div id="avail-rows-{{ s.id }}">
+                  {% for w in s.availability %}
+                  <div class="avail-row">
+                    <input type="time" name="avail_start" value="{{ w.start }}">
+                    <span>&ndash;</span>
+                    <input type="time" name="avail_end" value="{{ w.end }}">
+                    <button type="button" class="btn btn-quiet btn-sm" onclick="this.parentElement.remove()">&times;</button>
+                  </div>
+                  {% endfor %}
+                </div>
+                <button type="button" class="btn btn-quiet btn-sm" onclick="addAvailRow('avail-rows-{{ s.id }}')">+ Add time window</button>
+              </div>
+              <button type="submit" class="btn btn-primary">Save changes</button>
+            </form>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% endif %}
+</section>
+
+<script>
+function addAvailRow(containerId) {
+  const container = document.getElementById(containerId);
+  const row = document.createElement('div');
+  row.className = 'avail-row';
+  row.innerHTML = '<input type="time" name="avail_start"> <span>&ndash;</span> ' +
+    '<input type="time" name="avail_end"> ' +
+    '<button type="button" class="btn btn-quiet btn-sm" onclick="this.parentElement.remove()">&times;</button>';
+  container.appendChild(row);
+}
+function toggleEdit(id) {
+  const row = document.getElementById('edit-row-' + id);
+  row.style.display = row.style.display === 'none' ? 'table-row' : 'none';
+}
+</script>
+{% endblock %}

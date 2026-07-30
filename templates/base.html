@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>{% block title %}Student Scheduler{% endblock %}</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,700&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+<div class="app-shell">
+  <header class="topbar">
+    <div class="brand">
+      <span class="brand-mark">&#9998;</span>
+      <div class="brand-text">
+        <span class="brand-title">Rounds</span>
+        <span class="brand-sub">student caseload &amp; schedule</span>
+      </div>
+    </div>
+    <nav class="topnav">
+      <a href="{{ url_for('students') }}" class="{{ 'active' if request.endpoint == 'students' }}">Caseload</a>
+      <a href="{{ url_for('work_blocks') }}" class="{{ 'active' if request.endpoint == 'work_blocks' }}">Working Hours</a>
+      <a href="{{ url_for('schedule') }}" class="{{ 'active' if request.endpoint == 'schedule' }}">Weekly Schedule</a>
+    </nav>
+  </header>
+
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+    <div class="flash-stack">
+      {% for category, message in messages %}
+        <div class="flash flash-{{ category }}">{{ message }}</div>
+      {% endfor %}
+    </div>
+    {% endif %}
+  {% endwith %}
+
+  <main class="content">
+    {% block content %}{% endblock %}
+  </main>
+</div>
+</body>
+</html>
