@@ -80,9 +80,29 @@ def _day_steps(conn, week_start, day, day_blocks, students, scheduled_ids, scan_
                 and window_covers(s["availability"], cur, cur + GROUP_SESSION_LENGTH)
             ]
 
-            if len(group_candidates) >= MIN_GROUP_TO_FORM:
-                group_candidates.sort(key=lambda s: (-s["priority"], s["minutes_seen"]))
-                chosen = group_candidates[:GROUP_SIZE_MAX]
+            # Auto-grouping only bundles students in the same grade together;
+            # mixed-grade groups are still possible, just via manual
+            # drag-and-drop/override, not the automatic scheduler. When more
+            # than one grade has enough overlapping students at this moment,
+            # whichever grade's best-ranked (highest priority, then fewest
+            # minutes seen) candidate wins the slot.
+            by_grade = {}
+            for s in group_candidates:
+                by_grade.setdefault(s["grade"], []).append(s)
+
+            grade_pool = None
+            best_leader = None
+            for grade, bucket in by_grade.items():
+                if len(bucket) < MIN_GROUP_TO_FORM:
+                    continue
+                bucket.sort(key=lambda s: (-s["priority"], s["minutes_seen"]))
+                leader = bucket[0]
+                if best_leader is None or (leader["priority"], -leader["minutes_seen"]) > (best_leader["priority"], -best_leader["minutes_seen"]):
+                    best_leader = leader
+                    grade_pool = bucket
+
+            if grade_pool is not None:
+                chosen = grade_pool[:GROUP_SIZE_MAX]
                 end_slot = cur + GROUP_SESSION_LENGTH
                 cur_id = conn.execute(
                     """INSERT INTO schedule_entries
@@ -148,10 +168,11 @@ def generate_schedule_for_week(week_start, scan_increment=5):
     day has a permanent edge over the long run either.
 
     Within that, grouping is tried first at every open moment: 2-3
-    groupable students at the same school with overlapping availability
-    get a fixed 20-minute group session. If grouping doesn't apply, it
-    falls back to an individual session sized to that student's own
-    session_length.
+    groupable students at the same school AND same grade with overlapping
+    availability get a fixed 20-minute group session (mixed-grade groups are
+    still possible, but only via manual drag-and-drop/override, never the
+    automatic scheduler). If grouping doesn't apply, it falls back to an
+    individual session sized to that student's own session_length.
 
     Entries that are locked (manually overridden/drag-and-dropped) or that
     already have a student marked seen are left untouched; their students

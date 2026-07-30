@@ -28,6 +28,15 @@
       </select>
     </div>
     <div class="field">
+      <label>Grade</label>
+      <select name="grade">
+        <option value="">All grades</option>
+        {% for g in grade_options %}
+        <option value="{{ g }}" {{ 'selected' if g == grade_filter }}>{{ g }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="field">
       <label>Sort by</label>
       <select name="sort">
         <option value="priority_desc" {{ 'selected' if sort=='priority_desc' }}>Priority (high&#8594;low)</option>
@@ -62,6 +71,15 @@
         </datalist>
       </div>
       <div class="field">
+        <label>Grade</label>
+        <select name="grade" required>
+          <option value="" disabled selected>Choose a grade&hellip;</option>
+          {% for g in grade_options %}
+          <option value="{{ g }}">{{ g }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="field">
         <label>Session length (min)</label>
         <input type="number" name="session_length" min="5" step="5" value="30" required>
       </div>
@@ -69,7 +87,7 @@
 
     <label class="checkbox-label group-toggle">
       <input type="checkbox" name="groupable">
-      OK to see in a group session <span class="hint">(up to {{ group_size_max|default(5) }}, same school, overlapping times, fixed 20-min length)</span>
+      OK to see in a group session <span class="hint">(up to {{ group_size_max|default(3) }}, same school, same grade, overlapping times, fixed 20-min length)</span>
     </label>
 
     <div class="avail-block">
@@ -94,6 +112,7 @@
           <th>Name</th>
           <th>Priority</th>
           <th>School</th>
+          <th>Grade</th>
           <th>Session</th>
           <th>Group?</th>
           <th>Minutes seen</th>
@@ -107,6 +126,7 @@
           <td class="name-cell">{{ s.name }}</td>
           <td><span class="priority-badge p-{{ s.priority }}">{{ s.priority }}</span></td>
           <td>{{ s.school }}</td>
+          <td>{% if s.grade %}<span class="chip chip-grade">{{ s.grade }}</span>{% else %}<span class="chip chip-muted">not set</span>{% endif %}</td>
           <td class="mono">{{ s.session_length }} min</td>
           <td>
             {% if s.groupable %}<span class="chip chip-group">Yes</span>{% else %}<span class="chip chip-muted">No</span>{% endif %}
@@ -127,7 +147,7 @@
           </td>
         </tr>
         <tr id="edit-row-{{ s.id }}" class="edit-row" style="display:none">
-          <td colspan="8">
+          <td colspan="9">
             <form method="post" action="{{ url_for('edit_student', student_id=s.id) }}" class="student-form edit-form">
               <div class="grid-fields">
                 <div class="field">
@@ -143,6 +163,15 @@
                   <input type="text" name="school" value="{{ s.school }}" list="school-list" required>
                 </div>
                 <div class="field">
+                  <label>Grade</label>
+                  <select name="grade" required>
+                    <option value="" disabled {{ 'selected' if not s.grade }}>Choose a grade&hellip;</option>
+                    {% for g in grade_options %}
+                    <option value="{{ g }}" {{ 'selected' if g == s.grade }}>{{ g }}</option>
+                    {% endfor %}
+                  </select>
+                </div>
+                <div class="field">
                   <label>Session length (min)</label>
                   <input type="number" name="session_length" min="5" step="5" value="{{ s.session_length }}" required>
                 </div>
@@ -153,7 +182,7 @@
               </div>
               <label class="checkbox-label group-toggle">
                 <input type="checkbox" name="groupable" {{ 'checked' if s.groupable }}>
-                OK to see in a group session <span class="hint">(up to {{ group_size_max|default(5) }}, same school, overlapping times, fixed 20-min length)</span>
+                OK to see in a group session <span class="hint">(up to {{ group_size_max|default(3) }}, same school, same grade, overlapping times, fixed 20-min length)</span>
               </label>
               <div class="avail-block">
                 <label>Available time windows</label>

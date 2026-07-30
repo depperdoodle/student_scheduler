@@ -317,6 +317,7 @@ input:focus, select:focus {
 
 .chip-muted { background: rgba(0,0,0,0.05); color: #999; }
 .chip-group { background: rgba(232, 162, 61, 0.18); color: #8a5a15; font-weight: 600; }
+.chip-grade { background: rgba(122, 158, 126, 0.18); color: #3f5c42; font-weight: 600; }
 
 .group-toggle {
   margin-bottom: 16px;

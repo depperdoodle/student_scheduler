@@ -82,10 +82,10 @@ data like this off a personally-run server.
 ## How it works
 
 - **Caseload**: add/edit/remove students. Each has a name, priority (1–10),
-  school, session length (minutes — can vary per student), lifetime minutes
-  seen, whether they're OK to see in a group, and one or more available
-  time-of-day windows (applies any weekday). Filter by school/priority and
-  sort by any column.
+  school, grade (Preschool, Kindergarten, or 1–12), session length (minutes —
+  can vary per student), lifetime minutes seen, whether they're OK to see in
+  a group, and one or more available time-of-day windows (applies any
+  weekday). Filter by school/priority/grade and sort by any column.
 - **Working Hours**: tell it which school you're at and when, for each day
   Mon–Fri. This is a recurring weekly template — edit it any time.
 - **Weekly Schedule**: pick a week and click **Generate schedule**. All five
@@ -96,9 +96,12 @@ data like this off a personally-run server.
   empty). Which day gets first turn each round also rotates week to week.
   At every open moment:
   1. First tries to form a **group session**: if 2-3 students marked
-     "OK to see in a group" share a school and have overlapping availability
-     at that moment, the highest-priority (then least-minutes-seen) ones are
-     booked together for a fixed 20-minute session.
+     "OK to see in a group" share a school AND grade and have overlapping
+     availability at that moment, the highest-priority (then
+     least-minutes-seen) ones are booked together for a fixed 20-minute
+     session. Mixed-grade groups are never created automatically — but you
+     can still build one yourself by dragging a different-grade student
+     into an existing slot.
   2. If grouping doesn't apply, it falls back to an **individual session**
      sized to that student's own session length, same priority/minutes-seen
      logic as before.

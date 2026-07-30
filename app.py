@@ -5,7 +5,7 @@ from functools import wraps
 
 from flask import Flask, render_template, request, redirect, url_for, flash, Response, jsonify
 
-from db import get_db, init_db, row_to_student, GROUP_SIZE_MAX
+from db import get_db, init_db, row_to_student, GROUP_SIZE_MAX, GRADE_OPTIONS
 from scheduler import generate_schedule_for_week, DAY_NAMES, time_to_min
 
 app = Flask(__name__)
@@ -78,6 +78,7 @@ def students():
     conn = get_db()
     school_filter = request.args.get("school", "").strip()
     min_priority = request.args.get("min_priority", "").strip()
+    grade_filter = request.args.get("grade", "").strip()
     sort = request.args.get("sort", "priority_desc")
 
     query = "SELECT * FROM students WHERE active=1"
@@ -88,6 +89,9 @@ def students():
     if min_priority:
         query += " AND priority >= ?"
         params.append(int(min_priority))
+    if grade_filter:
+        query += " AND grade = ?"
+        params.append(grade_filter)
 
     sort_map = {
         "priority_desc": "priority DESC, minutes_seen ASC",
@@ -110,6 +114,8 @@ def students():
         schools=schools,
         school_filter=school_filter,
         min_priority=min_priority,
+        grade_filter=grade_filter,
+        grade_options=GRADE_OPTIONS,
         sort=sort,
         group_size_max=GROUP_SIZE_MAX,
     )
@@ -120,6 +126,7 @@ def add_student():
     name = request.form.get("name", "").strip()
     priority = int(request.form.get("priority", 5))
     school = request.form.get("school", "").strip()
+    grade = request.form.get("grade", "").strip()
     session_length = int(request.form.get("session_length", 30))
     groupable = 1 if request.form.get("groupable") == "on" else 0
     starts = request.form.getlist("avail_start")
@@ -134,13 +141,17 @@ def add_student():
         flash("Name and school are required.", "error")
         return redirect(url_for("students"))
 
+    if grade not in GRADE_OPTIONS:
+        flash("Pick a valid grade level.", "error")
+        return redirect(url_for("students"))
+
     priority = max(1, min(10, priority))
 
     conn = get_db()
     conn.execute(
-        """INSERT INTO students (name, priority, school, session_length, minutes_seen, availability, groupable, active)
-           VALUES (?, ?, ?, ?, 0, ?, ?, 1)""",
-        (name, priority, school, session_length, json.dumps(availability), groupable),
+        """INSERT INTO students (name, priority, school, grade, session_length, minutes_seen, availability, groupable, active)
+           VALUES (?, ?, ?, ?, ?, 0, ?, ?, 1)""",
+        (name, priority, school, grade, session_length, json.dumps(availability), groupable),
     )
     conn.commit()
     conn.close()
@@ -153,6 +164,7 @@ def edit_student(student_id):
     name = request.form.get("name", "").strip()
     priority = max(1, min(10, int(request.form.get("priority", 5))))
     school = request.form.get("school", "").strip()
+    grade = request.form.get("grade", "").strip()
     session_length = int(request.form.get("session_length", 30))
     minutes_seen = int(request.form.get("minutes_seen", 0))
     groupable = 1 if request.form.get("groupable") == "on" else 0
@@ -164,11 +176,15 @@ def edit_student(student_id):
         if s and e:
             availability.append({"start": s, "end": e})
 
+    if grade not in GRADE_OPTIONS:
+        flash("Pick a valid grade level.", "error")
+        return redirect(url_for("students"))
+
     conn = get_db()
     conn.execute(
-        """UPDATE students SET name=?, priority=?, school=?, session_length=?,
+        """UPDATE students SET name=?, priority=?, school=?, grade=?, session_length=?,
            minutes_seen=?, availability=?, groupable=? WHERE id=?""",
-        (name, priority, school, session_length, minutes_seen, json.dumps(availability), groupable, student_id),
+        (name, priority, school, grade, session_length, minutes_seen, json.dumps(availability), groupable, student_id),
     )
     conn.commit()
     conn.close()
@@ -243,7 +259,7 @@ def delete_work_block(block_id):
 def _load_entry_students(conn, entry_id):
     rows = conn.execute(
         """SELECT es.id AS es_id, es.student_id, es.seen, es.minutes_credited,
-                  st.name, st.priority, st.minutes_seen, st.session_length, st.school
+                  st.name, st.priority, st.minutes_seen, st.session_length, st.school, st.grade
            FROM entry_students es JOIN students st ON st.id = es.student_id
            WHERE es.entry_id=?
            ORDER BY st.priority DESC, st.name COLLATE NOCASE""",
@@ -267,7 +283,7 @@ def schedule():
     ).fetchall()
 
     all_students = conn.execute(
-        """SELECT id, name, school, priority, groupable FROM students
+        """SELECT id, name, school, grade, priority, groupable FROM students
            WHERE active=1 ORDER BY priority DESC, name COLLATE NOCASE"""
     ).fetchall()
 
@@ -353,7 +369,7 @@ def entry_card_fragment(entry_id):
     entry = dict(e)
     entry["students"] = _load_entry_students(conn, entry_id)
     all_students = conn.execute(
-        """SELECT id, name, school, priority, groupable FROM students
+        """SELECT id, name, school, grade, priority, groupable FROM students
            WHERE active=1 ORDER BY priority DESC, name COLLATE NOCASE"""
     ).fetchall()
     conn.close()

@@ -8,12 +8,15 @@ DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "scheduler.db
 GROUP_SESSION_LENGTH = 20
 GROUP_SIZE_MAX = 3
 
+GRADE_OPTIONS = ["Preschool", "Kindergarten"] + [str(n) for n in range(1, 13)]
+
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS students (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     name TEXT NOT NULL,
     priority INTEGER NOT NULL DEFAULT 5,
     school TEXT NOT NULL,
+    grade TEXT NOT NULL DEFAULT '',
     session_length INTEGER NOT NULL DEFAULT 30,
     minutes_seen INTEGER NOT NULL DEFAULT 0,
     availability TEXT NOT NULL DEFAULT '[]',
@@ -68,6 +71,8 @@ def _migrate(conn):
     if conn.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='students'").fetchone():
         if "groupable" not in _columns(conn, "students"):
             conn.execute("ALTER TABLE students ADD COLUMN groupable INTEGER NOT NULL DEFAULT 0")
+        if "grade" not in _columns(conn, "students"):
+            conn.execute("ALTER TABLE students ADD COLUMN grade TEXT NOT NULL DEFAULT ''")
 
     if conn.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='schedule_entries'").fetchone():
         cols = _columns(conn, "schedule_entries")

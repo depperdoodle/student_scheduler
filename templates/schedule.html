@@ -38,6 +38,7 @@
            data-name="{{ st.name|lower }}" data-school="{{ st.school|lower }}">
         <span class="priority-badge p-{{ st.priority }}">{{ st.priority }}</span>
         <span class="pool-chip-name">{{ st.name }}</span>
+        {% if st.grade %}<span class="chip chip-grade">{{ st.grade }}</span>{% endif %}
         <span class="pool-chip-school hint">{{ st.school }}</span>
         {% if week_counts.get(st.id) %}
         <span class="chip chip-muted pool-count">{{ week_counts.get(st.id) }}&times; this wk</span>

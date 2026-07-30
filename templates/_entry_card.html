@@ -19,6 +19,7 @@
         ondragstart="dragStartRoster(event, {{ st.student_id }}, {{ e.id }})">
       <span class="priority-badge p-{{ st.priority }}">{{ st.priority }}</span>
       <span class="entry-name">{{ st.name }}</span>
+      {% if st.grade %}<span class="chip chip-grade">{{ st.grade }}</span>{% endif %}
       <span class="entry-minutes mono">{{ st.minutes_seen }} min lifetime</span>
       {% if st.seen %}
         <span class="seen-check">&#10003; {{ st.minutes_credited }} min credited</span>
@@ -47,7 +48,7 @@
                  {{ 'checked' if is_checked }} {{ 'disabled' if is_seen_locked }}
                  {{ 'data-lock="seen"' if is_seen_locked }}
                  onchange="enforceGroupCap(this)">
-          {{ st.name }} <span class="hint">({{ st.school }})</span>
+          {{ st.name }} <span class="hint">({{ st.school }}{{ ', ' + st.grade if st.grade else '' }})</span>
           {% if is_seen_locked %}<span class="hint">&mdash; already seen, can't remove</span>{% endif %}
         </label>
         {% endfor %}
