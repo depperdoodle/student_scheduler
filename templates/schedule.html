@@ -5,7 +5,7 @@
 <div class="page-head schedule-head">
   <div>
     <h1>Week of {{ week_start }}</h1>
-    <p class="page-sub">Built from priority, minutes seen, availability, and your working hours. Groupable students who overlap at the same school are bundled into a 20-minute group session (up to {{ group_size_max }}) before anyone gets an individual slot. Drag students between slots to customize, or use "Adjust roster" for fine control.</p>
+    <p class="page-sub">Built from priority, minutes seen, availability, and your working hours. Groupable students who overlap at the same school are bundled into a 20-minute group session (up to {{ group_size_max }}) before anyone gets an individual slot. Override any slot, then mark who you actually saw.</p>
   </div>
   <div class="week-nav">
     <a class="btn btn-quiet" href="{{ url_for('schedule', week=prev_week) }}">&#8592; Prev week</a>
@@ -20,177 +20,97 @@
       {{ 'Regenerate schedule' if has_entries else 'Generate schedule' }}
     </button>
   </form>
-  <form method="post" action="{{ url_for('reset_schedule') }}" onsubmit="return confirm('Reset the whole week? This clears every slot — including overrides and anyone marked seen — and reverses any minutes credited this week. This can\'t be undone.');">
-    <input type="hidden" name="week_start" value="{{ week_start }}">
-    <button type="submit" class="btn btn-quiet btn-danger" {{ 'disabled' if not has_entries }}>Reset week</button>
-  </form>
-  <p class="hint">Regenerating leaves locked/overridden and already-seen slots alone, and rebuilds the rest. Resetting wipes the whole week clean and undoes any credited minutes.</p>
+  <p class="hint">Regenerating leaves locked/overridden and already-seen slots alone, and rebuilds the rest.</p>
 </section>
 
-<div class="schedule-layout">
-  <aside class="student-pool" ondragover="allowDrop(event)" ondrop="handlePoolDrop(event)">
-    <h3 class="pool-heading">Caseload</h3>
-    <input type="text" id="pool-search" class="pool-search" placeholder="Filter by name or school&hellip;" oninput="filterPool()">
-    <p class="hint">Drag a student onto a slot to schedule them. Drag a slot's student back here to unschedule.</p>
-    <div class="pool-list" id="pool-list">
-      {% for st in all_students %}
-      <div class="pool-chip" draggable="true" ondragstart="dragStartPool(event, {{ st.id }})"
-           data-name="{{ st.name|lower }}" data-school="{{ st.school|lower }}">
-        <span class="priority-badge p-{{ st.priority }}">{{ st.priority }}</span>
-        <span class="pool-chip-name">{{ st.name }}</span>
-        {% if st.grade %}<span class="chip chip-grade">{{ st.grade }}</span>{% endif %}
-        <span class="pool-chip-school hint">{{ st.school }}</span>
-        {% if week_counts.get(st.id) %}
-        <span class="chip chip-muted pool-count">{{ week_counts.get(st.id) }}&times; this wk</span>
+<section class="week-strip schedule-strip">
+  {% for name in day_names %}
+  <div class="day-column">
+    <h3 class="day-heading">{{ name }}</h3>
+    {% set entries = by_day[loop.index0] %}
+    {% if not entries %}
+      <p class="empty-state small">Nothing scheduled. Add working hours, then generate.</p>
+    {% else %}
+      {% for e in entries %}
+      {% set roster = e.students %}
+      {% set all_seen = roster and roster|selectattr('seen')|list|length == roster|length %}
+      <div class="entry-card {{ 'entry-group' if e.is_group }} {{ 'entry-seen' if all_seen }} {{ 'entry-empty' if not roster }}">
+        <div class="entry-top">
+          <div class="entry-time mono">{{ e.start_time }}&ndash;{{ e.end_time }}</div>
+          {% if e.is_group %}<span class="chip chip-group">Group &middot; {{ roster|length }}/{{ group_size_max }}</span>{% endif %}
+        </div>
+        <div class="entry-school chip">{{ e.school }}</div>
+
+        {% if roster %}
+        <ul class="roster-list">
+          {% for st in roster %}
+          <li class="roster-item {{ 'roster-seen' if st.seen }}">
+            <span class="priority-badge p-{{ st.priority }}">{{ st.priority }}</span>
+            <span class="entry-name">{{ st.name }}</span>
+            <span class="entry-minutes mono">{{ st.minutes_seen }} min lifetime</span>
+            {% if st.seen %}<span class="seen-check">&#10003; {{ st.minutes_credited }} min credited</span>{% endif %}
+          </li>
+          {% endfor %}
+        </ul>
+        {% else %}
+        <div class="entry-student entry-unassigned">No student assigned</div>
         {% endif %}
+
+        <details class="entry-controls">
+          <summary>Adjust roster &amp; attendance</summary>
+
+          <form method="post" action="{{ url_for('override_entry', entry_id=e.id) }}" class="roster-form">
+            <input type="hidden" name="week_start" value="{{ week_start }}">
+            <div class="roster-checklist" data-max="{{ group_size_max }}">
+              {% for st in all_students %}
+              {% set is_checked = roster|selectattr('student_id', 'equalto', st.id)|list|length > 0 %}
+              {% set is_seen_locked = roster|selectattr('student_id', 'equalto', st.id)|selectattr('seen')|list|length > 0 %}
+              <label class="roster-check-label">
+                <input type="checkbox" name="student_ids" value="{{ st.id }}"
+                       {{ 'checked' if is_checked }} {{ 'disabled' if is_seen_locked }}
+                       {{ 'data-lock="seen"' if is_seen_locked }}
+                       onchange="enforceGroupCap(this)">
+                {{ st.name }} <span class="hint">({{ st.school }})</span>
+                {% if is_seen_locked %}<span class="hint">&mdash; already seen, can't remove</span>{% endif %}
+              </label>
+              {% endfor %}
+            </div>
+            <button type="submit" class="btn btn-quiet btn-sm">Save roster (max {{ group_size_max }})</button>
+          </form>
+
+          {% if roster %}
+          <form method="post" action="{{ url_for('mark_attendance', entry_id=e.id) }}" class="attendance-form">
+            <input type="hidden" name="week_start" value="{{ week_start }}">
+            {% for st in roster %}
+            <div class="control-row attendance-row">
+              <label class="checkbox-label">
+                <input type="checkbox" name="seen_{{ st.student_id }}" {{ 'checked' if st.seen }}>
+                {{ st.name }}
+              </label>
+              <input type="number" name="minutes_{{ st.student_id }}" min="0"
+                     placeholder="{{ st.session_length if not e.is_group else 20 }} min"
+                     value="{{ st.minutes_credited if st.minutes_credited else '' }}">
+            </div>
+            {% endfor %}
+            <button type="submit" class="btn btn-quiet btn-sm">Save attendance</button>
+          </form>
+          {% endif %}
+        </details>
       </div>
       {% endfor %}
-    </div>
-  </aside>
-
-  <section class="week-strip schedule-strip">
-    {% for name in day_names %}
-    <div class="day-column">
-      <h3 class="day-heading">{{ name }}</h3>
-      {% set entries = by_day[loop.index0] %}
-      {% if not entries %}
-        <p class="empty-state small">Nothing scheduled. Add working hours, then generate.</p>
-      {% else %}
-        {% for e in entries %}
-          {% include "_entry_card.html" %}
-        {% endfor %}
-      {% endif %}
-    </div>
-    {% endfor %}
-  </section>
-</div>
+    {% endif %}
+  </div>
+  {% endfor %}
+</section>
 
 <script>
-const WEEK_START = {{ week_start|tojson }};
-
-function allowDrop(ev) {
-  ev.preventDefault();
-  if (ev.currentTarget.classList.contains('entry-card') || ev.currentTarget.classList.contains('student-pool')) {
-    ev.currentTarget.classList.add('drop-hover');
-  }
-}
-function dragLeave(ev) {
-  ev.currentTarget.classList.remove('drop-hover');
-}
-
-function dragStartPool(ev, studentId) {
-  ev.dataTransfer.setData('text/plain', JSON.stringify({ studentId: studentId, fromEntryId: null }));
-}
-function dragStartRoster(ev, studentId, entryId) {
-  ev.dataTransfer.setData('text/plain', JSON.stringify({ studentId: studentId, fromEntryId: entryId }));
-}
-
-async function refreshCard(entryId) {
-  const res = await fetch(`/schedule/${entryId}/card?week=${encodeURIComponent(WEEK_START)}`);
-  if (!res.ok) return;
-  const html = await res.text();
-  const container = document.getElementById(`entry-card-${entryId}`);
-  if (container) container.outerHTML = html;
-}
-
-async function addStudentToEntry(entryId, studentId) {
-  const res = await fetch(`/api/schedule/${entryId}/add`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ student_id: studentId }),
-  });
-  const data = await res.json();
-  if (!data.ok) alert(data.message || "Couldn't add that student to this slot.");
-  await refreshCard(entryId);
-}
-
-async function removeStudent(entryId, studentId) {
-  const res = await fetch(`/api/schedule/${entryId}/remove`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ student_id: studentId }),
-  });
-  const data = await res.json();
-  if (!data.ok) { alert(data.message || "Couldn't remove that student."); return; }
-  await refreshCard(entryId);
-  updatePoolCount(studentId, -1);
-}
-
-function updatePoolCount(studentId, delta) {
-  // Best-effort visual nudge; a full page reload will always show the true count.
-  const chip = document.querySelector(`.pool-chip[ondragstart*="${studentId})"]`);
-  if (!chip) return;
-  let badge = chip.querySelector('.pool-count');
-  let current = badge ? parseInt(badge.textContent, 10) : 0;
-  const next = Math.max(0, current + delta);
-  if (next > 0) {
-    if (!badge) {
-      badge = document.createElement('span');
-      badge.className = 'chip chip-muted pool-count';
-      chip.appendChild(badge);
-    }
-    badge.textContent = next + '\u00d7 this wk';
-  } else if (badge) {
-    badge.remove();
-  }
-}
-
-async function handleDrop(ev, toEntryId) {
-  ev.preventDefault();
-  ev.currentTarget.classList.remove('drop-hover');
-  let data;
-  try {
-    data = JSON.parse(ev.dataTransfer.getData('text/plain'));
-  } catch (err) { return; }
-
-  const studentId = data.studentId;
-  const fromEntryId = data.fromEntryId;
-
-  if (fromEntryId && String(fromEntryId) === String(toEntryId)) return;
-
-  if (fromEntryId) {
-    const rres = await fetch(`/api/schedule/${fromEntryId}/remove`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ student_id: studentId }),
-    });
-    const rdata = await rres.json();
-    if (!rdata.ok) { alert(rdata.message || "Couldn't move that student — they may already be marked seen."); return; }
-    await refreshCard(fromEntryId);
-  } else {
-    updatePoolCount(studentId, 1);
-  }
-
-  await addStudentToEntry(toEntryId, studentId);
-}
-
-function handlePoolDrop(ev) {
-  ev.preventDefault();
-  ev.currentTarget.classList.remove('drop-hover');
-  let data;
-  try {
-    data = JSON.parse(ev.dataTransfer.getData('text/plain'));
-  } catch (err) { return; }
-  if (data.fromEntryId) {
-    removeStudent(data.fromEntryId, data.studentId);
-  }
-}
-
-function filterPool() {
-  const q = document.getElementById('pool-search').value.trim().toLowerCase();
-  document.querySelectorAll('.pool-chip').forEach(function(chip) {
-    const match = !q || chip.dataset.name.includes(q) || chip.dataset.school.includes(q);
-    chip.style.display = match ? '' : 'none';
-  });
-}
-
 function enforceGroupCap(changedBox) {
   const container = changedBox.closest('.roster-checklist');
   const max = parseInt(container.dataset.max, 10);
   const boxes = container.querySelectorAll('input[type="checkbox"]');
   const checkedCount = container.querySelectorAll('input[type="checkbox"]:checked').length;
   boxes.forEach(function(b) {
-    if (b.dataset.lock === 'seen') return;
+    if (b.dataset.lock === 'seen') return; // never touch seen-locked boxes
     if (!b.checked) {
       b.disabled = checkedCount >= max;
     }

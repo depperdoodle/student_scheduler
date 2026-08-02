@@ -317,7 +317,6 @@ input:focus, select:focus {
 
 .chip-muted { background: rgba(0,0,0,0.05); color: #999; }
 .chip-group { background: rgba(232, 162, 61, 0.18); color: #8a5a15; font-weight: 600; }
-.chip-grade { background: rgba(122, 158, 126, 0.18); color: #3f5c42; font-weight: 600; }
 
 .group-toggle {
   margin-bottom: 16px;
@@ -510,119 +509,8 @@ input:focus, select:focus {
 
 @media (max-width: 980px) {
   .week-strip { grid-template-columns: repeat(2, 1fr); }
-  .schedule-layout { grid-template-columns: 1fr !important; }
 }
 @media (max-width: 600px) {
   .topbar { flex-direction: column; align-items: flex-start; gap: 12px; }
   .week-strip { grid-template-columns: 1fr; }
 }
-
-/* ---------- generate/reset panel ---------- */
-
-.generate-panel form { display: inline-block; }
-.generate-panel .hint { flex-basis: 100%; }
-
-/* ---------- schedule layout: pool sidebar + week strip ---------- */
-
-.schedule-layout {
-  display: grid;
-  grid-template-columns: 240px 1fr;
-  gap: 18px;
-  align-items: start;
-}
-
-.student-pool {
-  background: var(--card-bg);
-  border: 1px solid var(--border);
-  border-radius: 14px;
-  padding: 16px;
-  position: sticky;
-  top: 16px;
-  max-height: calc(100vh - 32px);
-  overflow-y: auto;
-  transition: background 0.15s ease, border-color 0.15s ease;
-}
-
-.student-pool.drop-hover {
-  background: rgba(193, 85, 74, 0.06);
-  border-color: var(--rust);
-}
-
-.pool-heading {
-  font-family: 'Fraunces', serif;
-  font-size: 16px;
-  font-weight: 600;
-  margin: 0 0 10px;
-}
-
-.pool-search {
-  width: 100%;
-  margin-bottom: 10px;
-}
-
-.pool-list {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  margin-top: 10px;
-}
-
-.pool-chip {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 6px;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 7px 9px;
-  cursor: grab;
-  background: #fff;
-  font-size: 13px;
-}
-
-.pool-chip:active { cursor: grabbing; }
-
-.pool-chip-name { font-weight: 600; }
-
-.pool-chip-school { font-size: 11.5px; }
-
-.pool-count {
-  margin-left: auto;
-  font-size: 11px;
-}
-
-/* ---------- drag & drop targets ---------- */
-
-.entry-card {
-  transition: background 0.15s ease, border-color 0.15s ease;
-}
-
-.entry-card.drop-hover {
-  background: rgba(61, 90, 128, 0.08);
-  border-color: var(--slate);
-}
-
-.drop-hint {
-  border: 1px dashed var(--border);
-  border-radius: 8px;
-  padding: 10px;
-  text-align: center;
-}
-
-.roster-item {
-  cursor: grab;
-  position: relative;
-}
-.roster-item[draggable="false"] { cursor: default; }
-
-.chip-remove {
-  margin-left: auto;
-  background: none;
-  border: none;
-  color: #999;
-  font-size: 16px;
-  line-height: 1;
-  cursor: pointer;
-  padding: 2px 6px;
-}
-.chip-remove:hover { color: var(--rust); }
