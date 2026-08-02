@@ -122,6 +122,13 @@ data like this off a personally-run server.
     inflated by a session that got wiped out. This is different from
     **Regenerate**, which leaves locked/seen slots alone and only rebuilds
     the rest.
+  - **Add a time block** for anything that isn't a student session — a
+    meeting, lunch, travel, a planning period. Give it a day, a time range,
+    and a label, and it shows up right in that day's timeline alongside
+    student sessions. The auto-scheduler treats that time as reserved on
+    every school that day, so Generate/Regenerate will never book a student
+    on top of it. These aren't touched by Reset or Regenerate — remove them
+    individually whenever they're no longer needed.
 
 ## Project structure
 
